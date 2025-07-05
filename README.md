@@ -50,6 +50,9 @@ Set the following environment variables:
 - `DISABLE_SPEEDTEST`: Optional. Disables the speedtest UI. Returns 404 for the /speedtest path and direct access to speedtest.html. Default is `false`.
 - `STREMIO_PROXY_URL`: Optional. Stremio server URL for alternative content proxying. Example: `http://127.0.0.1:11470`.
 - `M3U8_CONTENT_ROUTING`: Optional. Routing strategy for M3U8 content URLs: `mediaflow` (default), `stremio`, or `direct`.
+- `INIT_SEGMENT_CACHE_SIZE_MB`: Optional. Size of the init segment cache in MB. Default is `500`.
+- `MPD_CACHE_SIZE_MB`: Optional. Size of the MPD cache in MB. Default is `100`.
+- `EXTRACTOR_CACHE_SIZE_MB`: Optional. Size of the extractor cache in MB. Default is `50`.
 
 ### Transport Configuration
 

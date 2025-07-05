@@ -68,6 +68,11 @@ class Settings(BaseSettings):
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"  # The user agent to use for HTTP requests.
     )
 
+    # Cache configuration (sizes in MB)
+    init_segment_cache_size_mb: int = 500  # Size of the init segment cache in MB
+    mpd_cache_size_mb: int = 100  # Size of the MPD cache in MB
+    extractor_cache_size_mb: int = 50  # Size of the extractor cache in MB
+
     class Config:
         env_file = ".env"
         extra = "ignore"
