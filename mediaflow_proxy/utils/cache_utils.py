@@ -17,6 +17,7 @@ import aiofiles.os
 
 from mediaflow_proxy.utils.http_utils import download_file_with_retry, DownloadError
 from mediaflow_proxy.utils.mpd_utils import parse_mpd, parse_mpd_dict
+from mediaflow_proxy.configs import settings
 
 logger = logging.getLogger(__name__)
 
@@ -276,17 +277,17 @@ class AsyncMemoryCache:
 INIT_SEGMENT_CACHE = HybridCache(
     cache_dir_name="init_segment_cache",
     ttl=3600,  # 1 hour
-    max_memory_size=500 * 1024 * 1024,  # 500MB for init segments
+    max_memory_size=settings.init_segment_cache_size_mb * 1024 * 1024,
 )
 
 MPD_CACHE = AsyncMemoryCache(
-    max_memory_size=100 * 1024 * 1024,  # 100MB for MPD files
+    max_memory_size=settings.mpd_cache_size_mb * 1024 * 1024,
 )
 
 EXTRACTOR_CACHE = HybridCache(
     cache_dir_name="extractor_cache",
     ttl=5 * 60,  # 5 minutes
-    max_memory_size=50 * 1024 * 1024,
+    max_memory_size=settings.extractor_cache_size_mb * 1024 * 1024,
 )
 
 

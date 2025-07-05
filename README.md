@@ -41,6 +41,20 @@ MediaFlow Proxy is a powerful and flexible solution for proxifying various types
 
 ## Configuration
 
+
+Set the following environment variables:
+
+- `API_PASSWORD`: Optional. Protects against unauthorized access and API network abuses.
+- `ENABLE_STREAMING_PROGRESS`: Optional. Enable streaming progress logging. Default is `false`.
+- `DISABLE_HOME_PAGE`: Optional. Disables the home page UI. Returns 404 for the root path and direct access to index.html. Default is `false`.
+- `DISABLE_DOCS`: Optional. Disables the API documentation (Swagger UI). Returns 404 for the /docs path. Default is `false`.
+- `DISABLE_SPEEDTEST`: Optional. Disables the speedtest UI. Returns 404 for the /speedtest path and direct access to speedtest.html. Default is `false`.
+- `STREMIO_PROXY_URL`: Optional. Stremio server URL for alternative content proxying. Example: `http://127.0.0.1:11470`.
+- `M3U8_CONTENT_ROUTING`: Optional. Routing strategy for M3U8 content URLs: `mediaflow` (default), `stremio`, or `direct`.
+- `INIT_SEGMENT_CACHE_SIZE_MB`: Optional. Size of the init segment cache in MB. Default is `500`.
+- `MPD_CACHE_SIZE_MB`: Optional. Size of the MPD cache in MB. Default is `100`.
+- `EXTRACTOR_CACHE_SIZE_MB`: Optional. Size of the extractor cache in MB. Default is `50`.
+=======
 The proxy reads its configuration from environment variables. The most common
 options are summarized below.
 
@@ -53,6 +67,7 @@ options are summarized below.
 | `DISABLE_SPEEDTEST` | `false` | Disable the speedtest UI (`/speedtest`). |
 | `STREMIO_PROXY_URL` | _(none)_ | Stremio server URL for alternative content proxying. |
 | `M3U8_CONTENT_ROUTING` | `mediaflow` | Routing strategy for M3U8 content URLs (`mediaflow`, `stremio`, or `direct`). |
+
 
 ### Transport Configuration
 
