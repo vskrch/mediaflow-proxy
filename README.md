@@ -41,15 +41,18 @@ MediaFlow Proxy is a powerful and flexible solution for proxifying various types
 
 ## Configuration
 
-Set the following environment variables:
+The proxy reads its configuration from environment variables. The most common
+options are summarized below.
 
-- `API_PASSWORD`: Optional. Protects against unauthorized access and API network abuses.
-- `ENABLE_STREAMING_PROGRESS`: Optional. Enable streaming progress logging. Default is `false`.
-- `DISABLE_HOME_PAGE`: Optional. Disables the home page UI. Returns 404 for the root path and direct access to index.html. Default is `false`.
-- `DISABLE_DOCS`: Optional. Disables the API documentation (Swagger UI). Returns 404 for the /docs path. Default is `false`.
-- `DISABLE_SPEEDTEST`: Optional. Disables the speedtest UI. Returns 404 for the /speedtest path and direct access to speedtest.html. Default is `false`.
-- `STREMIO_PROXY_URL`: Optional. Stremio server URL for alternative content proxying. Example: `http://127.0.0.1:11470`.
-- `M3U8_CONTENT_ROUTING`: Optional. Routing strategy for M3U8 content URLs: `mediaflow` (default), `stremio`, or `direct`.
+| Variable | Default | Description |
+| --- | --- | --- |
+| `API_PASSWORD` | _(none)_ | Protects against unauthorized access and API network abuses. |
+| `ENABLE_STREAMING_PROGRESS` | `false` | Enable streaming progress logging. |
+| `DISABLE_HOME_PAGE` | `false` | Disable the home page UI (returns 404 for `/` and `/index.html`). |
+| `DISABLE_DOCS` | `false` | Disable the API documentation (`/docs`). |
+| `DISABLE_SPEEDTEST` | `false` | Disable the speedtest UI (`/speedtest`). |
+| `STREMIO_PROXY_URL` | _(none)_ | Stremio server URL for alternative content proxying. |
+| `M3U8_CONTENT_ROUTING` | `mediaflow` | Routing strategy for M3U8 content URLs (`mediaflow`, `stremio`, or `direct`). |
 
 ### Transport Configuration
 
@@ -137,6 +140,19 @@ Each route can have the following settings:
         }
     }'
     ```
+
+### Cache Settings
+
+Initialization segments, MPDs and extractor results are cached in the system's
+temporary directory. If you need to change the location, set the `TMPDIR`
+environment variable before starting the server:
+
+```bash
+TMPDIR=/path/to/cache mediaflow-proxy
+```
+
+Cached items are automatically purged based on their TTL (1 hour for init
+segments and speed test data, 5 minutes for extractor results).
 
 ### Speed Test Feature
 
@@ -514,6 +530,22 @@ http://localhost:8888/proxy/hls/manifest.m3u8?d=https://iptv.provider.com/playli
 ```
 
 This parameter bypasses URL-based detection and routing strategy, ensuring consistent behavior for IPTV streams that don't have clear format indicators in their URLs.
+
+### CLI Commands
+
+Run the server:
+
+```bash
+mediaflow-proxy
+```
+
+Decrypt an MP4 segment from the command line:
+
+```bash
+python -m mediaflow_proxy.drm.decrypter --init init.mp4 --segment seg.m4s \
+    --key_id 0123456789abcdef0123456789abcdef --key abcdef0123456789abcdef0123456789 \
+    --output decrypted.mp4
+```
 
 ## Future Development
 
