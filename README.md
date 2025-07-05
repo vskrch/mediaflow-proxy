@@ -464,6 +464,25 @@ for url in encoded_urls:
     print(url)
 ```
 
+#### CLI Usage
+
+You can also generate URLs directly from the command line using the built-in CLI:
+
+```bash
+# Single URL
+mediaflow-proxy-cli generate-url \
+  --mediaflow-proxy-url http://localhost:8888 \
+  --endpoint /proxy/stream \
+  --destination-url https://example.com/video.mp4 \
+  --request-headers '{"referer": "https://example.com"}' \
+  --api-password your_password
+
+# Multiple URLs from a file
+mediaflow-proxy-cli generate-urls urls.json \
+  --mediaflow-proxy-url http://localhost:8888 \
+  --api-password your_password
+```
+
 #### Filename Preservation for Media Players
 
 MediaFlow Proxy now supports preserving filenames in URLs, which is particularly useful for media players like Infuse that use the filename to fetch metadata. When you include a `filename` parameter in your request, the proxy will ensure this information is preserved and properly passed to the media player.
