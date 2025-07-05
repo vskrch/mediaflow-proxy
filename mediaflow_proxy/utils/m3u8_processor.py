@@ -1,6 +1,7 @@
 import codecs
+import io
 import re
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Iterable, Iterator
 from urllib import parse
 
 from mediaflow_proxy.configs import settings
@@ -25,7 +26,7 @@ class M3U8Processor:
             request.url_for("hls_manifest_proxy").replace(scheme=get_original_scheme(request))
         )
 
-    async def process_m3u8(self, content: str, base_url: str) -> str:
+    async def process_m3u8(self, content: Iterable[str] | str, base_url: str) -> str:
         """
         Processes the m3u8 content, proxying URLs and handling key lines.
 
@@ -36,15 +37,15 @@ class M3U8Processor:
         Returns:
             str: The processed m3u8 content.
         """
-        lines = content.splitlines()
+        if isinstance(content, str):
+            iterator: Iterator[str] = io.StringIO(content)
+        else:
+            iterator = iter(content)
+
         processed_lines = []
-        for line in lines:
-            if "URI=" in line:
-                processed_lines.append(await self.process_key_line(line, base_url))
-            elif not line.startswith("#") and line.strip():
-                processed_lines.append(await self.proxy_content_url(line, base_url))
-            else:
-                processed_lines.append(line)
+        for line in iterator:
+            line = line.rstrip("\n")
+            processed_lines.append(await self.process_line(line, base_url))
         return "\n".join(processed_lines)
 
     async def process_m3u8_streaming(
@@ -155,8 +156,9 @@ class M3U8Processor:
         # For playlist URLs, always use MediaFlow proxy regardless of strategy
         # Check for actual playlist file extensions, not just substring matches
         parsed_url = parse.urlparse(full_url)
-        if (parsed_url.path.endswith((".m3u", ".m3u8", ".m3u_plus")) or
-            parse.parse_qs(parsed_url.query).get("type", [""])[0] in ["m3u", "m3u8", "m3u_plus"]):
+        if parsed_url.path.endswith((".m3u", ".m3u8", ".m3u_plus")) or parse.parse_qs(parsed_url.query).get(
+            "type", [""]
+        )[0] in ["m3u", "m3u8", "m3u_plus"]:
             return await self.proxy_url(full_url, base_url, use_full_url=True)
 
         # Route non-playlist content URLs based on strategy
