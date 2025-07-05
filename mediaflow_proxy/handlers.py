@@ -4,6 +4,8 @@ from urllib.parse import urlparse, parse_qs
 
 import httpx
 import tenacity
+from contextlib import asynccontextmanager
+import typing
 from fastapi import Request, Response, HTTPException
 from starlette.background import BackgroundTask
 
@@ -26,15 +28,15 @@ from .utils.mpd_utils import pad_base64
 logger = logging.getLogger(__name__)
 
 
-async def setup_client_and_streamer() -> tuple[httpx.AsyncClient, Streamer]:
-    """
-    Set up an HTTP client and a streamer.
-
-    Returns:
-        tuple: An httpx.AsyncClient instance and a Streamer instance.
-    """
-    client = create_httpx_client()
-    return client, Streamer(client)
+@asynccontextmanager
+async def setup_client_and_streamer() -> typing.AsyncGenerator[tuple[httpx.AsyncClient, Streamer], None]:
+    """Yield an HTTP client and streamer, closing them automatically."""
+    async with create_httpx_client() as client:
+        streamer = Streamer(client)
+        try:
+            yield client, streamer
+        finally:
+            await streamer.close()
 
 
 def handle_exceptions(exception: Exception) -> Response:
@@ -76,48 +78,66 @@ async def handle_hls_stream_proxy(
     Returns:
         Union[Response, EnhancedStreamingResponse]: Either a processed m3u8 playlist or a streaming response.
     """
-    _, streamer = await setup_client_and_streamer()
-    # Handle range requests
-    content_range = proxy_headers.request.get("range", "bytes=0-")
-    if "nan" in content_range.casefold():
-        # Handle invalid range requests "bytes=NaN-NaN"
-        raise HTTPException(status_code=416, detail="Invalid Range Header")
-    proxy_headers.request.update({"range": content_range})
+    async with setup_client_and_streamer() as (_, streamer):
+        # Handle range requests
+        content_range = proxy_headers.request.get("range", "bytes=0-")
+        if "nan" in content_range.casefold():
+            # Handle invalid range requests "bytes=NaN-NaN"
+            raise HTTPException(status_code=416, detail="Invalid Range Header")
+        proxy_headers.request.update({"range": content_range})
 
-    try:
-        # If force_playlist_proxy is enabled, skip detection and directly process as m3u8
-        if hls_params.force_playlist_proxy:
-            return await fetch_and_process_m3u8(
-                streamer, hls_params.destination, proxy_headers, request, hls_params.key_url, hls_params.force_playlist_proxy
+        try:
+            # If force_playlist_proxy is enabled, skip detection and directly process as m3u8
+            if hls_params.force_playlist_proxy:
+                return await fetch_and_process_m3u8(
+                    streamer,
+                    hls_params.destination,
+                    proxy_headers,
+                    request,
+                    hls_params.key_url,
+                    hls_params.force_playlist_proxy,
+                )
+
+            parsed_url = urlparse(hls_params.destination)
+            # Check if the URL is a valid m3u8 playlist or m3u file
+            if parsed_url.path.endswith((".m3u", ".m3u8", ".m3u_plus")) or parse_qs(parsed_url.query).get("type", [""])[
+                0
+            ] in [
+                "m3u",
+                "m3u8",
+                "m3u_plus",
+            ]:
+                return await fetch_and_process_m3u8(
+                    streamer,
+                    hls_params.destination,
+                    proxy_headers,
+                    request,
+                    hls_params.key_url,
+                    hls_params.force_playlist_proxy,
+                )
+
+            # Create initial streaming response to check content type
+            await streamer.create_streaming_response(hls_params.destination, proxy_headers.request)
+            response_headers = prepare_response_headers(streamer.response.headers, proxy_headers.response)
+
+            if "mpegurl" in response_headers.get("content-type", "").lower():
+                return await fetch_and_process_m3u8(
+                    streamer,
+                    hls_params.destination,
+                    proxy_headers,
+                    request,
+                    hls_params.key_url,
+                    hls_params.force_playlist_proxy,
+                )
+
+            return EnhancedStreamingResponse(
+                streamer.stream_content(),
+                status_code=streamer.response.status_code,
+                headers=response_headers,
+                background=BackgroundTask(streamer.close),
             )
-
-        parsed_url = urlparse(hls_params.destination)
-        # Check if the URL is a valid m3u8 playlist or m3u file
-        if parsed_url.path.endswith((".m3u", ".m3u8", ".m3u_plus")) or parse_qs(parsed_url.query).get("type", [""])[
-            0
-        ] in ["m3u", "m3u8", "m3u_plus"]:
-            return await fetch_and_process_m3u8(
-                streamer, hls_params.destination, proxy_headers, request, hls_params.key_url, hls_params.force_playlist_proxy
-            )
-
-        # Create initial streaming response to check content type
-        await streamer.create_streaming_response(hls_params.destination, proxy_headers.request)
-        response_headers = prepare_response_headers(streamer.response.headers, proxy_headers.response)
-
-        if "mpegurl" in response_headers.get("content-type", "").lower():
-            return await fetch_and_process_m3u8(
-                streamer, hls_params.destination, proxy_headers, request, hls_params.key_url, hls_params.force_playlist_proxy
-            )
-
-        return EnhancedStreamingResponse(
-            streamer.stream_content(),
-            status_code=streamer.response.status_code,
-            headers=response_headers,
-            background=BackgroundTask(streamer.close),
-        )
-    except Exception as e:
-        await streamer.close()
-        return handle_exceptions(e)
+        except Exception as e:
+            return handle_exceptions(e)
 
 
 async def handle_stream_request(
@@ -138,27 +158,25 @@ async def handle_stream_request(
     Returns:
         Union[Response, EnhancedStreamingResponse]: Either a HEAD response with headers or a streaming response.
     """
-    client, streamer = await setup_client_and_streamer()
+    async with setup_client_and_streamer() as (client, streamer):
+        try:
+            await streamer.create_streaming_response(video_url, proxy_headers.request)
+            response_headers = prepare_response_headers(streamer.response.headers, proxy_headers.response)
 
-    try:
-        await streamer.create_streaming_response(video_url, proxy_headers.request)
-        response_headers = prepare_response_headers(streamer.response.headers, proxy_headers.response)
-
-        if method == "HEAD":
-            # For HEAD requests, just return the headers without streaming content
-            await streamer.close()
-            return Response(headers=response_headers, status_code=streamer.response.status_code)
-        else:
-            # For GET requests, return the streaming response
-            return EnhancedStreamingResponse(
-                streamer.stream_content(),
-                headers=response_headers,
-                status_code=streamer.response.status_code,
-                background=BackgroundTask(streamer.close),
-            )
-    except Exception as e:
-        await streamer.close()
-        return handle_exceptions(e)
+            if method == "HEAD":
+                # For HEAD requests, just return the headers without streaming content
+                await streamer.close()
+                return Response(headers=response_headers, status_code=streamer.response.status_code)
+            else:
+                # For GET requests, return the streaming response
+                return EnhancedStreamingResponse(
+                    streamer.stream_content(),
+                    headers=response_headers,
+                    status_code=streamer.response.status_code,
+                    background=BackgroundTask(streamer.close),
+                )
+        except Exception as e:
+            return handle_exceptions(e)
 
 
 def prepare_response_headers(original_headers, proxy_response_headers) -> dict:
@@ -196,7 +214,12 @@ async def proxy_stream(method: str, destination: str, proxy_headers: ProxyReques
 
 
 async def fetch_and_process_m3u8(
-    streamer: Streamer, url: str, proxy_headers: ProxyRequestHeaders, request: Request, key_url: str = None, force_playlist_proxy: bool = None
+    streamer: Streamer,
+    url: str,
+    proxy_headers: ProxyRequestHeaders,
+    request: Request,
+    key_url: str = None,
+    force_playlist_proxy: bool = None,
 ):
     """
     Fetches and processes the m3u8 playlist on-the-fly, converting it to an HLS playlist.

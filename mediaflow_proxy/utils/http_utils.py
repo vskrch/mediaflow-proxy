@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from urllib import parse
 from urllib.parse import urlencode
+from contextlib import asynccontextmanager
 
 import anyio
 import h11
@@ -31,12 +32,20 @@ class DownloadError(Exception):
         super().__init__(message)
 
 
-def create_httpx_client(follow_redirects: bool = True, **kwargs) -> httpx.AsyncClient:
-    """Creates an HTTPX client with configured proxy routing"""
+@asynccontextmanager
+async def httpx_client(follow_redirects: bool = True, **kwargs) -> typing.AsyncGenerator[httpx.AsyncClient, None]:
+    """Create and yield an HTTPX client with configured proxy routing."""
     mounts = settings.transport_config.get_mounts()
     kwargs.setdefault("timeout", settings.transport_config.timeout)
     client = httpx.AsyncClient(mounts=mounts, follow_redirects=follow_redirects, **kwargs)
-    return client
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
+# Backwards compatibility
+create_httpx_client = httpx_client
 
 
 @retry(
